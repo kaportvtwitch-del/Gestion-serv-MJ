@@ -25,7 +25,9 @@ client.commands = new Collection();
 // PERMISSIONS MJ (SAFE - CATÉGORIE ONLY)
 // =====================
 const ownerPermissions = [
-  // TEXT
+  // =====================
+  // VIEW / TEXT
+  // =====================
   PermissionsBitField.Flags.ViewChannel,
   PermissionsBitField.Flags.SendMessages,
   PermissionsBitField.Flags.SendMessagesInThreads,
@@ -41,10 +43,19 @@ const ownerPermissions = [
   PermissionsBitField.Flags.SendTTSMessages,
   PermissionsBitField.Flags.UseApplicationCommands,
 
-  // THREADS
+  // =====================
+  // 🔥 GESTION SALONS (IMPORTANT)
+  // =====================
+  PermissionsBitField.Flags.ManageChannels,
+
+  // =====================
+  // 🔥 GESTION THREADS
+  // =====================
   PermissionsBitField.Flags.ManageThreads,
 
-  // VOICE (CATÉGORIE ONLY)
+  // =====================
+  // 🎙️ VOICE
+  // =====================
   PermissionsBitField.Flags.Connect,
   PermissionsBitField.Flags.Speak,
   PermissionsBitField.Flags.Stream,
