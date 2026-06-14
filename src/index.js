@@ -1,3 +1,6 @@
+console.log("BOT STARTING...");
+console.log("TOKEN:", !!process.env.DISCORD_TOKEN);
+
 const { Client, GatewayIntentBits, Collection } = require("discord.js");
 
 process.on("uncaughtException", console.error);
