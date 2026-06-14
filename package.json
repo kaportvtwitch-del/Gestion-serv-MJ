@@ -1,13 +1,13 @@
 {
-  "name": "mj-manager-bot",
+  "name": "mj-discord-bot",
   "version": "1.0.0",
-  "description": "Bot Discord de gestion des MJ",
-  "main": "index.js",
+  "main": "src/index.js",
+  "type": "commonjs",
   "scripts": {
-    "start": "node index.js",
-    "deploy": "node deploy-commands.js"
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js"
   },
   "dependencies": {
-    "discord.js": "^14.21.0"
+    "discord.js": "^14.16.3"
   }
 }
