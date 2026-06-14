@@ -21,19 +21,15 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
-
-    if (sub !== "ajouter") return;
-
     const name = interaction.options.getString("nom");
     const owner = interaction.options.getUser("owner");
 
     const guild = interaction.guild;
     const member = await guild.members.fetch(owner.id);
 
-    // 1. rôle MJ
+    // ROLE
     const role = await guild.roles.create({
-      name: name,
+      name,
       permissions: [
         PermissionsBitField.Flags.ViewChannel,
         PermissionsBitField.Flags.SendMessages,
@@ -45,9 +41,9 @@ module.exports = {
 
     await member.roles.add(role);
 
-    // 2. catégorie JDR
+    // CATEGORY
     const category = await guild.channels.create({
-      name: name,
+      name,
       type: 4,
       permissionOverwrites: [
         {
@@ -73,7 +69,7 @@ module.exports = {
       ]
     });
 
-    // 3. salons de base
+    // CHANNELS
     await guild.channels.create({
       name: "général",
       type: 0,
@@ -92,6 +88,6 @@ module.exports = {
       parent: category.id
     });
 
-    await interaction.reply(`✅ JDR **${name}** créé avec succès`);
+    await interaction.reply(`✅ JDR **${name}** créé !`);
   }
 };

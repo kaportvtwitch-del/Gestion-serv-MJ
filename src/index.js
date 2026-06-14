@@ -1,21 +1,14 @@
-console.log("BOT STARTING...");
-console.log("TOKEN:", !!process.env.DISCORD_TOKEN);
-
 const { Client, GatewayIntentBits, Collection } = require("discord.js");
 
 process.on("uncaughtException", console.error);
 process.on("unhandledRejection", console.error);
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
 client.commands = new Collection();
 
-// load command
 const mj = require("./commands/mj");
 client.commands.set(mj.data.name, mj);
 

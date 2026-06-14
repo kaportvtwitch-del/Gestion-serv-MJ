@@ -1,8 +1,5 @@
 const { REST, Routes } = require("discord.js");
 
-const clientId = process.env.CLIENT_ID;
-const token = process.env.DISCORD_TOKEN;
-
 const commands = [
   {
     name: "mj",
@@ -16,14 +13,14 @@ const commands = [
           {
             name: "nom",
             type: 3,
-            description: "Nom du JDR",
-            required: true
+            required: true,
+            description: "Nom du JDR"
           },
           {
             name: "owner",
             type: 6,
-            description: "MJ propriétaire",
-            required: true
+            required: true,
+            description: "MJ propriétaire"
           }
         ]
       }
@@ -31,18 +28,21 @@ const commands = [
   }
 ];
 
-const rest = new REST({ version: "10" }).setToken(token);
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
   try {
-    console.log("🚀 Déploiement des commandes...");
+    console.log("🚀 Déploiement GUILD commands...");
 
     await rest.put(
-      Routes.applicationCommands(clientId),
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
       { body: commands }
     );
 
-    console.log("✅ Commandes déployées");
+    console.log("✅ Commandes disponibles immédiatement !");
   } catch (err) {
     console.error(err);
   }
