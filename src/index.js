@@ -12,6 +12,9 @@ const {
   ChannelType
 } = require("discord.js");
 
+// =====================
+// ERROR HANDLING SAFE
+// =====================
 process.on("uncaughtException", console.error);
 process.on("unhandledRejection", console.error);
 
@@ -61,12 +64,12 @@ const mjPermissions = [
 ];
 
 // =====================
-// COMMAND HANDLER
+// COMMAND STORAGE
 // =====================
 client.commands = new Collection();
 
 // =====================
-// COMMAND MJ
+// MJ COMMAND
 // =====================
 client.commands.set("mj", {
   data: new SlashCommandBuilder()
@@ -92,28 +95,25 @@ client.commands.set("mj", {
         .setName("gestion")
         .setDescription("Gestion des rôles MJ")
 
-        // ADD
         .addSubcommand(sub =>
           sub
             .setName("add")
-            .setDescription("Ajouter rôle gestionnaire")
+            .setDescription("Ajouter rôle MJ")
             .addRoleOption(o =>
               o.setName("role").setDescription("Rôle").setRequired(true)
             )
         )
 
-        // LIST
         .addSubcommand(sub =>
           sub
             .setName("list")
-            .setDescription("Lister les rôles gestionnaires")
+            .setDescription("Lister rôles MJ")
         )
 
-        // DELETE
         .addSubcommand(sub =>
           sub
             .setName("delete")
-            .setDescription("Supprimer rôle gestionnaire")
+            .setDescription("Supprimer rôle MJ")
             .addRoleOption(o =>
               o.setName("role").setDescription("Rôle").setRequired(true)
             )
@@ -128,7 +128,7 @@ client.commands.set("mj", {
     const group = interaction.options.getSubcommandGroup();
 
     // =====================
-    // GESTION ADD
+    // ADD ROLE MJ
     // =====================
     if (group === "gestion" && sub === "add") {
       if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -143,13 +143,13 @@ client.commands.set("mj", {
       }
 
       return interaction.reply({
-        content: `✅ ${role.name} ajouté comme gestionnaire MJ`,
+        content: `✅ ${role.name} ajouté MJ`,
         ephemeral: true
       });
     }
 
     // =====================
-    // GESTION LIST
+    // LIST MJ ROLES
     // =====================
     if (group === "gestion" && sub === "list") {
       const roles = guildData.allowedRoles
@@ -160,14 +160,14 @@ client.commands.set("mj", {
 
       return interaction.reply({
         content: roles.length
-          ? `📋 Rôles MJ :\n${roles}`
-          : "❌ Aucun rôle MJ configuré",
+          ? `📋 MJ :\n${roles}`
+          : "❌ Aucun rôle MJ",
         ephemeral: true
       });
     }
 
     // =====================
-    // GESTION DELETE
+    // DELETE MJ ROLE
     // =====================
     if (group === "gestion" && sub === "delete") {
       if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -178,7 +178,7 @@ client.commands.set("mj", {
 
       if (!guildData.allowedRoles.includes(role.id)) {
         return interaction.reply({
-          content: "❌ Ce rôle n'est pas gestionnaire",
+          content: "❌ Ce rôle n'est pas MJ",
           ephemeral: true
         });
       }
@@ -187,7 +187,7 @@ client.commands.set("mj", {
       saveData(data);
 
       return interaction.reply({
-        content: `🗑️ ${role.name} supprimé des gestionnaires MJ`,
+        content: `🗑️ ${role.name} supprimé MJ`,
         ephemeral: true
       });
     }
@@ -265,49 +265,34 @@ client.commands.set("mj", {
 });
 
 // =====================
-// DEPLOY COMMANDS FIX
+// INTERACTIONS HANDLER (CRUCIAL)
+// =====================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const command = client.commands.get(interaction.commandName);
+  if (!command) return;
+
+  try {
+    await command.execute(interaction);
+  } catch (err) {
+    console.error(err);
+
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: "❌ Erreur commande",
+        ephemeral: true
+      });
+    }
+  }
+});
+
+// =====================
+// DEPLOY COMMANDS
 // =====================
 async function deployCommands() {
   const commands = [
-    new SlashCommandBuilder()
-      .setName("mj")
-      .setDescription("Gestion des JDR")
-
-      .addSubcommand(sub =>
-        sub
-          .setName("ajouter")
-          .setDescription("Créer un JDR")
-          .addStringOption(o =>
-            o.setName("nom").setDescription("Nom du JDR").setRequired(true)
-          )
-          .addUserOption(o =>
-            o.setName("owner").setDescription("MJ").setRequired(true)
-          )
-      )
-
-      .addSubcommandGroup(group =>
-        group
-          .setName("gestion")
-          .setDescription("Gestion MJ")
-
-          .addSubcommand(sub =>
-            sub.setName("add")
-              .setDescription("Ajouter rôle MJ")
-              .addRoleOption(o => o.setName("role").setDescription("Role").setRequired(true))
-          )
-
-          .addSubcommand(sub =>
-            sub.setName("list")
-              .setDescription("Lister rôles MJ")
-          )
-
-          .addSubcommand(sub =>
-            sub.setName("delete")
-              .setDescription("Supprimer rôle MJ")
-              .addRoleOption(o => o.setName("role").setDescription("Role").setRequired(true))
-          )
-      )
-      .toJSON()
+    client.commands.get("mj").data.toJSON()
   ];
 
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
@@ -322,8 +307,8 @@ async function deployCommands() {
       { body: commands }
     );
     console.log("✅ Commands OK");
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error(err);
   }
 }
 
