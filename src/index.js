@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+
 const {
   Client,
   GatewayIntentBits,
@@ -12,17 +15,37 @@ const {
 process.on("uncaughtException", console.error);
 process.on("unhandledRejection", console.error);
 
-// =====================
-// CLIENT
-// =====================
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-client.commands = new Collection();
+// =====================
+// DATA JSON
+// =====================
+const dataPath = path.join(__dirname, "../data.json");
+
+function loadData() {
+  if (!fs.existsSync(dataPath)) {
+    fs.writeFileSync(dataPath, JSON.stringify({ guilds: {} }, null, 2));
+  }
+  return JSON.parse(fs.readFileSync(dataPath, "utf8"));
+}
+
+function saveData(data) {
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+}
+
+let data = loadData();
+
+function getGuildData(guildId) {
+  if (!data.guilds[guildId]) {
+    data.guilds[guildId] = { allowedRoles: [] };
+  }
+  return data.guilds[guildId];
+}
 
 // =====================
-// PERMISSIONS MJ (SAFE - CATÉGORIE ONLY)
+// PERMISSIONS MJ (SAFE)
 // =====================
 const ownerPermissions = [
   // =====================
@@ -66,110 +89,158 @@ const ownerPermissions = [
 ];
 
 // =====================
-// COMMAND MJ
+// COMMANDS
+// =====================
+client.commands = new Collection();
+
+// =====================
+// MJ COMMAND
 // =====================
 client.commands.set("mj", {
   data: new SlashCommandBuilder()
     .setName("mj")
-    .setDescription("Créer un JDR")
+    .setDescription("Gestion des JDR")
+
+    // CREATE
     .addSubcommand(sub =>
       sub
         .setName("ajouter")
-        .setDescription("Créer un univers JDR")
-        .addStringOption(opt =>
-          opt.setName("nom").setDescription("Nom du JDR").setRequired(true)
-        )
-        .addUserOption(opt =>
-          opt.setName("owner").setDescription("MJ propriétaire").setRequired(true)
-        )
+        .setDescription("Créer un JDR")
+        .addStringOption(o => o.setName("nom").setRequired(true))
+        .addUserOption(o => o.setName("owner").setRequired(true))
+    )
+
+    // AUTHORIZE ROLE
+    .addSubcommand(sub =>
+      sub
+        .setName("add-gestion")
+        .setDescription("Autoriser un rôle à créer des JDR")
+        .addRoleOption(o => o.setName("role").setRequired(true))
     ),
 
   async execute(interaction) {
-    const name = interaction.options.getString("nom");
-    const owner = interaction.options.getUser("owner");
-
+    const sub = interaction.options.getSubcommand();
     const guild = interaction.guild;
-    const member = await guild.members.fetch(owner.id);
+    const guildData = getGuildData(guild.id);
 
     // =====================
-    // ROLE MJ
+    // ADD ROLE AUTH
     // =====================
-    const role = await guild.roles.create({
-      name: `MJ - ${name}`,
-      permissions: []
-    });
+    if (sub === "add-gestion") {
+      if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
+        return interaction.reply({
+          content: "❌ Admin uniquement",
+          ephemeral: true
+        });
+      }
 
-    await member.roles.add(role);
+      const role = interaction.options.getRole("role");
 
-    // =====================
-    // CATEGORY
-    // =====================
-    const category = await guild.channels.create({
-      name,
-      type: ChannelType.GuildCategory,
-      permissionOverwrites: [
-        {
-          id: guild.roles.everyone.id,
-          deny: [PermissionsBitField.Flags.ViewChannel]
-        },
-        {
-          id: role.id,
-          allow: ownerPermissions
-        },
-        {
-          id: member.id,
-          allow: ownerPermissions
-        }
-      ]
-    });
+      if (!guildData.allowedRoles.includes(role.id)) {
+        guildData.allowedRoles.push(role.id);
+        saveData(data);
+      }
+
+      return interaction.reply({
+        content: `✅ Rôle **${role.name}** autorisé sur ce serveur`,
+        ephemeral: true
+      });
+    }
 
     // =====================
-    // CHANNELS
+    // CREATE JDR
     // =====================
+    if (sub === "ajouter") {
+      const member = interaction.member;
 
-    await guild.channels.create({
-      name: "général",
-      type: ChannelType.GuildText,
-      parent: category.id
-    });
+      const isAllowed = member.roles.cache.some(r =>
+        guildData.allowedRoles.includes(r.id)
+      );
 
-    await guild.channels.create({
-      name: "hrp",
-      type: ChannelType.GuildText,
-      parent: category.id
-    });
+      if (!isAllowed) {
+        return interaction.reply({
+          content: "❌ Tu n'as pas la permission d'utiliser cette commande",
+          ephemeral: true
+        });
+      }
 
-    await guild.channels.create({
-      name: "vocal",
-      type: ChannelType.GuildVoice,
-      parent: category.id
-    });
+      const name = interaction.options.getString("nom");
+      const owner = interaction.options.getUser("owner");
 
-    await interaction.reply({
-      content: `✅ JDR **${name}** créé avec succès`,
-      ephemeral: true
-    });
+      const target = await guild.members.fetch(owner.id);
+
+      const role = await guild.roles.create({
+        name: `MJ - ${name}`,
+        permissions: []
+      });
+
+      await target.roles.add(role);
+
+      const category = await guild.channels.create({
+        name,
+        type: ChannelType.GuildCategory,
+        permissionOverwrites: [
+          {
+            id: guild.roles.everyone.id,
+            deny: [PermissionsBitField.Flags.ViewChannel]
+          },
+          {
+            id: role.id,
+            allow: ownerPermissions
+          },
+          {
+            id: target.id,
+            allow: ownerPermissions
+          }
+        ]
+      });
+
+      await guild.channels.create({
+        name: "général",
+        type: ChannelType.GuildText,
+        parent: category.id
+      });
+
+      await guild.channels.create({
+        name: "hrp",
+        type: ChannelType.GuildText,
+        parent: category.id
+      });
+
+      await guild.channels.create({
+        name: "vocal",
+        type: ChannelType.GuildVoice,
+        parent: category.id
+      });
+
+      return interaction.reply({
+        content: `✅ JDR **${name}** créé avec succès`,
+        ephemeral: true
+      });
+    }
   }
 });
 
 // =====================
-// AUTO DEPLOY SLASH COMMAND
+// DEPLOY COMMANDS
 // =====================
 async function deployCommands() {
   const commands = [
     new SlashCommandBuilder()
       .setName("mj")
-      .setDescription("Créer un JDR")
+      .setDescription("Gestion JDR")
+
       .addSubcommand(sub =>
-        sub
-          .setName("ajouter")
-          .setDescription("Créer un univers JDR")
-          .addStringOption(opt =>
-            opt.setName("nom").setRequired(true)
-          )
-          .addUserOption(opt =>
-            opt.setName("owner").setRequired(true)
-          )
+        sub.setName("ajouter")
+          .setDescription("Créer un JDR")
+          .addStringOption(o => o.setName("nom").setRequired(true))
+          .addUserOption(o => o.setName("owner").setRequired(true))
+      )
+
+      .addSubcommand(sub =>
+        sub.setName("add-gestion")
+          .setDescription("Autoriser un rôle MJ")
+          .addRoleOption(o => o.setName("role").setRequired(true))
       )
       .toJSON()
   ];
@@ -177,8 +248,7 @@ async function deployCommands() {
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
   try {
-    console.log("🚀 Déploiement slash commands...");
-
+    console.log("🚀 Deploy slash commands...");
     await rest.put(
       Routes.applicationGuildCommands(
         process.env.CLIENT_ID,
@@ -186,8 +256,7 @@ async function deployCommands() {
       ),
       { body: commands }
     );
-
-    console.log("✅ Slash commands OK");
+    console.log("✅ Commands OK");
   } catch (err) {
     console.error(err);
   }
@@ -198,24 +267,7 @@ async function deployCommands() {
 // =====================
 client.once("ready", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
-
   await deployCommands();
-});
-
-// =====================
-// INTERACTIONS
-// =====================
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
-
-  try {
-    await command.execute(interaction);
-  } catch (err) {
-    console.error(err);
-  }
 });
 
 // =====================
