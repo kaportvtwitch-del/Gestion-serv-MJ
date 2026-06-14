@@ -50,7 +50,7 @@ function getGuildData(guildId) {
 // =====================
 // PERMISSIONS MJ
 // =====================
-const ownerPermissions = [
+const mjPermissions = [
   // =====================
   // VIEW / TEXT
   // =====================
