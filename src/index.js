@@ -23,7 +23,7 @@ const client = new Client({
 });
 
 // =====================
-// JSON STORAGE
+// DATA JSON
 // =====================
 const dataPath = path.join(__dirname, "../data.json");
 
@@ -53,26 +53,27 @@ function getGuildData(guildId) {
 const mjPermissions = [
   PermissionsBitField.Flags.ViewChannel,
   PermissionsBitField.Flags.SendMessages,
-  PermissionsBitField.Flags.ManageChannels,
+  PermissionsBitField.Flags.ManageMessages,
   PermissionsBitField.Flags.ReadMessageHistory,
   PermissionsBitField.Flags.Connect,
-  PermissionsBitField.Flags.Speak
+  PermissionsBitField.Flags.Speak,
+  PermissionsBitField.Flags.ManageChannels
 ];
 
 // =====================
-// COMMANDS
+// COMMAND HANDLER
 // =====================
 client.commands = new Collection();
 
 // =====================
-// MJ COMMAND
+// COMMAND MJ
 // =====================
 client.commands.set("mj", {
   data: new SlashCommandBuilder()
     .setName("mj")
     .setDescription("Gestion des JDR")
 
-    // AJOUT JDR
+    // CREATE JDR
     .addSubcommand(sub =>
       sub
         .setName("ajouter")
@@ -85,33 +86,36 @@ client.commands.set("mj", {
         )
     )
 
-    // GESTION ADD
+    // GESTION GROUP
     .addSubcommandGroup(group =>
       group
         .setName("gestion")
-        .setDescription("Gestion des rôles MJ autorisés")
+        .setDescription("Gestion des rôles MJ")
 
+        // ADD
         .addSubcommand(sub =>
           sub
             .setName("add")
-            .setDescription("Ajouter un rôle gestionnaire")
+            .setDescription("Ajouter rôle gestionnaire")
             .addRoleOption(o =>
-              o.setName("role").setDescription("Rôle à ajouter").setRequired(true)
+              o.setName("role").setDescription("Rôle").setRequired(true)
             )
         )
 
+        // LIST
         .addSubcommand(sub =>
           sub
             .setName("list")
             .setDescription("Lister les rôles gestionnaires")
         )
 
+        // DELETE
         .addSubcommand(sub =>
           sub
             .setName("delete")
-            .setDescription("Supprimer un rôle gestionnaire")
+            .setDescription("Supprimer rôle gestionnaire")
             .addRoleOption(o =>
-              o.setName("role").setDescription("Rôle à supprimer").setRequired(true)
+              o.setName("role").setDescription("Rôle").setRequired(true)
             )
         )
     ),
@@ -128,10 +132,7 @@ client.commands.set("mj", {
     // =====================
     if (group === "gestion" && sub === "add") {
       if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
-        return interaction.reply({
-          content: "❌ Admin uniquement",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
       }
 
       const role = interaction.options.getRole("role");
@@ -142,7 +143,7 @@ client.commands.set("mj", {
       }
 
       return interaction.reply({
-        content: `✅ Rôle **${role.name}** ajouté aux gestionnaires MJ`,
+        content: `✅ ${role.name} ajouté comme gestionnaire MJ`,
         ephemeral: true
       });
     }
@@ -159,8 +160,8 @@ client.commands.set("mj", {
 
       return interaction.reply({
         content: roles.length
-          ? `📋 Rôles MJ autorisés :\n${roles}`
-          : "❌ Aucun rôle gestionnaire configuré",
+          ? `📋 Rôles MJ :\n${roles}`
+          : "❌ Aucun rôle MJ configuré",
         ephemeral: true
       });
     }
@@ -170,10 +171,7 @@ client.commands.set("mj", {
     // =====================
     if (group === "gestion" && sub === "delete") {
       if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
-        return interaction.reply({
-          content: "❌ Admin uniquement",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
       }
 
       const role = interaction.options.getRole("role");
@@ -189,7 +187,7 @@ client.commands.set("mj", {
       saveData(data);
 
       return interaction.reply({
-        content: `🗑️ Rôle **${role.name}** retiré des gestionnaires MJ`,
+        content: `🗑️ ${role.name} supprimé des gestionnaires MJ`,
         ephemeral: true
       });
     }
@@ -205,10 +203,7 @@ client.commands.set("mj", {
       );
 
       if (!isAllowed) {
-        return interaction.reply({
-          content: "❌ Tu n'as pas la permission",
-          ephemeral: true
-        });
+        return interaction.reply({ content: "❌ Pas autorisé", ephemeral: true });
       }
 
       const name = interaction.options.getString("nom");
@@ -216,11 +211,13 @@ client.commands.set("mj", {
 
       const target = await guild.members.fetch(owner.id);
 
+      // MJ ROLE
       const mjRole = await guild.roles.create({
         name: `MJ - ${name}`,
         permissions: []
       });
 
+      // PLAYER ROLE
       const playerRole = await guild.roles.create({
         name: `JDR - ${name}`,
         permissions: []
@@ -229,6 +226,7 @@ client.commands.set("mj", {
       await target.roles.add(mjRole);
       await target.roles.add(playerRole);
 
+      // CATEGORY
       const category = await guild.channels.create({
         name,
         type: ChannelType.GuildCategory,
@@ -254,23 +252,9 @@ client.commands.set("mj", {
         ]
       });
 
-      await guild.channels.create({
-        name: "général",
-        type: ChannelType.GuildText,
-        parent: category.id
-      });
-
-      await guild.channels.create({
-        name: "hrp",
-        type: ChannelType.GuildText,
-        parent: category.id
-      });
-
-      await guild.channels.create({
-        name: "vocal",
-        type: ChannelType.GuildVoice,
-        parent: category.id
-      });
+      await guild.channels.create({ name: "général", type: ChannelType.GuildText, parent: category.id });
+      await guild.channels.create({ name: "hrp", type: ChannelType.GuildText, parent: category.id });
+      await guild.channels.create({ name: "vocal", type: ChannelType.GuildVoice, parent: category.id });
 
       return interaction.reply({
         content: `✅ JDR **${name}** créé`,
@@ -281,7 +265,7 @@ client.commands.set("mj", {
 });
 
 // =====================
-// DEPLOY COMMANDS
+// DEPLOY COMMANDS FIX
 // =====================
 async function deployCommands() {
   const commands = [
@@ -294,33 +278,33 @@ async function deployCommands() {
           .setName("ajouter")
           .setDescription("Créer un JDR")
           .addStringOption(o =>
-            o.setName("nom").setRequired(true)
+            o.setName("nom").setDescription("Nom du JDR").setRequired(true)
           )
           .addUserOption(o =>
-            o.setName("owner").setRequired(true)
+            o.setName("owner").setDescription("MJ").setRequired(true)
           )
       )
 
       .addSubcommandGroup(group =>
         group
           .setName("gestion")
-          .setDescription("Gestion des rôles MJ")
+          .setDescription("Gestion MJ")
 
           .addSubcommand(sub =>
             sub.setName("add")
-              .setDescription("Ajouter rôle gestionnaire")
-              .addRoleOption(o => o.setName("role").setRequired(true))
+              .setDescription("Ajouter rôle MJ")
+              .addRoleOption(o => o.setName("role").setDescription("Role").setRequired(true))
           )
 
           .addSubcommand(sub =>
             sub.setName("list")
-              .setDescription("Lister rôles gestionnaires")
+              .setDescription("Lister rôles MJ")
           )
 
           .addSubcommand(sub =>
             sub.setName("delete")
-              .setDescription("Supprimer rôle gestionnaire")
-              .addRoleOption(o => o.setName("role").setRequired(true))
+              .setDescription("Supprimer rôle MJ")
+              .addRoleOption(o => o.setName("role").setDescription("Role").setRequired(true))
           )
       )
       .toJSON()
@@ -338,8 +322,8 @@ async function deployCommands() {
       { body: commands }
     );
     console.log("✅ Commands OK");
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
   }
 }
 
