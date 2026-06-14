@@ -5,7 +5,8 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
-  PermissionsBitField
+  PermissionsBitField,
+  ChannelType
 } = require("discord.js");
 
 process.on("uncaughtException", console.error);
@@ -21,25 +22,54 @@ const client = new Client({
 client.commands = new Collection();
 
 // =====================
-// COMMAND LOGIC
+// PERMISSIONS MJ (SAFE - CATÉGORIE ONLY)
+// =====================
+const ownerPermissions = [
+  // TEXT
+  PermissionsBitField.Flags.ViewChannel,
+  PermissionsBitField.Flags.SendMessages,
+  PermissionsBitField.Flags.SendMessagesInThreads,
+  PermissionsBitField.Flags.CreatePublicThreads,
+  PermissionsBitField.Flags.CreatePrivateThreads,
+  PermissionsBitField.Flags.ManageMessages,
+  PermissionsBitField.Flags.EmbedLinks,
+  PermissionsBitField.Flags.AttachFiles,
+  PermissionsBitField.Flags.ReadMessageHistory,
+  PermissionsBitField.Flags.AddReactions,
+  PermissionsBitField.Flags.UseExternalEmojis,
+  PermissionsBitField.Flags.UseExternalStickers,
+  PermissionsBitField.Flags.SendTTSMessages,
+  PermissionsBitField.Flags.UseApplicationCommands,
+
+  // THREADS
+  PermissionsBitField.Flags.ManageThreads,
+
+  // VOICE (CATÉGORIE ONLY)
+  PermissionsBitField.Flags.Connect,
+  PermissionsBitField.Flags.Speak,
+  PermissionsBitField.Flags.Stream,
+  PermissionsBitField.Flags.UseVAD,
+  PermissionsBitField.Flags.PrioritySpeaker,
+  PermissionsBitField.Flags.RequestToSpeak,
+  PermissionsBitField.Flags.UseEmbeddedActivities
+];
+
+// =====================
+// COMMAND MJ
 // =====================
 client.commands.set("mj", {
   data: new SlashCommandBuilder()
     .setName("mj")
-    .setDescription("Gestion des JDR")
+    .setDescription("Créer un JDR")
     .addSubcommand(sub =>
       sub
         .setName("ajouter")
-        .setDescription("Créer un JDR complet")
+        .setDescription("Créer un univers JDR")
         .addStringOption(opt =>
-          opt.setName("nom")
-            .setDescription("Nom du JDR")
-            .setRequired(true)
+          opt.setName("nom").setDescription("Nom du JDR").setRequired(true)
         )
         .addUserOption(opt =>
-          opt.setName("owner")
-            .setDescription("MJ propriétaire")
-            .setRequired(true)
+          opt.setName("owner").setDescription("MJ propriétaire").setRequired(true)
         )
     ),
 
@@ -50,88 +80,84 @@ client.commands.set("mj", {
     const guild = interaction.guild;
     const member = await guild.members.fetch(owner.id);
 
-    // ROLE
+    // =====================
+    // ROLE MJ
+    // =====================
     const role = await guild.roles.create({
-      name,
-      permissions: [
-        PermissionsBitField.Flags.ViewChannel,
-        PermissionsBitField.Flags.SendMessages,
-        PermissionsBitField.Flags.Connect,
-        PermissionsBitField.Flags.ManageChannels,
-        PermissionsBitField.Flags.ManageMessages
-      ]
+      name: `MJ - ${name}`,
+      permissions: []
     });
 
     await member.roles.add(role);
 
+    // =====================
     // CATEGORY
+    // =====================
     const category = await guild.channels.create({
       name,
-      type: 4,
+      type: ChannelType.GuildCategory,
       permissionOverwrites: [
         {
-          id: guild.roles.everyone,
+          id: guild.roles.everyone.id,
           deny: [PermissionsBitField.Flags.ViewChannel]
         },
         {
           id: role.id,
-          allow: [
-            PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.SendMessages,
-            PermissionsBitField.Flags.Connect
-          ]
+          allow: ownerPermissions
         },
         {
           id: member.id,
-          allow: [
-            PermissionsBitField.Flags.ManageChannels,
-            PermissionsBitField.Flags.ManageMessages,
-            PermissionsBitField.Flags.ViewChannel
-          ]
+          allow: ownerPermissions
         }
       ]
     });
 
+    // =====================
     // CHANNELS
+    // =====================
+
     await guild.channels.create({
       name: "général",
-      type: 0,
+      type: ChannelType.GuildText,
       parent: category.id
     });
 
     await guild.channels.create({
       name: "hrp",
-      type: 0,
+      type: ChannelType.GuildText,
       parent: category.id
     });
 
     await guild.channels.create({
       name: "vocal",
-      type: 2,
+      type: ChannelType.GuildVoice,
       parent: category.id
     });
 
-    await interaction.reply(`✅ JDR **${name}** créé avec succès`);
+    await interaction.reply({
+      content: `✅ JDR **${name}** créé avec succès`,
+      ephemeral: true
+    });
   }
 });
 
 // =====================
-// DEPLOY SLASH COMMANDS AUTO
+// AUTO DEPLOY SLASH COMMAND
 // =====================
 async function deployCommands() {
   const commands = [
     new SlashCommandBuilder()
       .setName("mj")
-      .setDescription("Gestion des JDR")
+      .setDescription("Créer un JDR")
       .addSubcommand(sub =>
         sub
           .setName("ajouter")
-          .setDescription("Créer un JDR complet")
+          .setDescription("Créer un univers JDR")
           .addStringOption(opt =>
-            opt.setName("nom").setDescription("Nom").setRequired(true)
+            opt.setName("nom").setRequired(true)
           )
           .addUserOption(opt =>
-            opt.setName("owner").setDescription("MJ").setRequired(true)
+            opt.setName("owner").setRequired(true)
           )
       )
       .toJSON()
@@ -150,19 +176,19 @@ async function deployCommands() {
       { body: commands }
     );
 
-    console.log("✅ Slash commands prêtes !");
+    console.log("✅ Slash commands OK");
   } catch (err) {
-    console.error("❌ Deploy error:", err);
+    console.error(err);
   }
 }
 
 // =====================
-// READY EVENT
+// READY
 // =====================
 client.once("ready", async () => {
-  console.log(`✅ Connecté en tant que ${client.user.tag}`);
+  console.log(`✅ Connecté : ${client.user.tag}`);
 
-  await deployCommands(); // 🔥 AUTO DEPLOY
+  await deployCommands();
 });
 
 // =====================
@@ -178,12 +204,6 @@ client.on("interactionCreate", async (interaction) => {
     await command.execute(interaction);
   } catch (err) {
     console.error(err);
-    if (!interaction.replied) {
-      await interaction.reply({
-        content: "❌ Erreur commande",
-        ephemeral: true
-      });
-    }
   }
 });
 
