@@ -15,12 +15,15 @@ const {
 process.on("uncaughtException", console.error);
 process.on("unhandledRejection", console.error);
 
+// =====================
+// CLIENT
+// =====================
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
 // =====================
-// DATA JSON
+// JSON STORAGE
 // =====================
 const dataPath = path.join(__dirname, "../data.json");
 
@@ -45,7 +48,7 @@ function getGuildData(guildId) {
 }
 
 // =====================
-// PERMISSIONS MJ (SAFE)
+// PERMISSIONS MJ
 // =====================
 const ownerPermissions = [
   // =====================
@@ -89,7 +92,7 @@ const ownerPermissions = [
 ];
 
 // =====================
-// COMMANDS
+// COMMAND HANDLER SIMPLE
 // =====================
 client.commands = new Collection();
 
@@ -101,21 +104,31 @@ client.commands.set("mj", {
     .setName("mj")
     .setDescription("Gestion des JDR")
 
-    // CREATE
     .addSubcommand(sub =>
       sub
         .setName("ajouter")
         .setDescription("Créer un JDR")
-        .addStringOption(o => o.setName("nom").setRequired(true))
-        .addUserOption(o => o.setName("owner").setRequired(true))
+        .addStringOption(o =>
+          o.setName("nom")
+            .setDescription("Nom du JDR")
+            .setRequired(true)
+        )
+        .addUserOption(o =>
+          o.setName("owner")
+            .setDescription("MJ propriétaire")
+            .setRequired(true)
+        )
     )
 
-    // AUTHORIZE ROLE
     .addSubcommand(sub =>
       sub
         .setName("add-gestion")
         .setDescription("Autoriser un rôle à créer des JDR")
-        .addRoleOption(o => o.setName("role").setRequired(true))
+        .addRoleOption(o =>
+          o.setName("role")
+            .setDescription("Rôle autorisé")
+            .setRequired(true)
+        )
     ),
 
   async execute(interaction) {
@@ -142,7 +155,7 @@ client.commands.set("mj", {
       }
 
       return interaction.reply({
-        content: `✅ Rôle **${role.name}** autorisé sur ce serveur`,
+        content: `✅ Rôle **${role.name}** autorisé`,
         ephemeral: true
       });
     }
@@ -159,7 +172,7 @@ client.commands.set("mj", {
 
       if (!isAllowed) {
         return interaction.reply({
-          content: "❌ Tu n'as pas la permission d'utiliser cette commande",
+          content: "❌ Tu n'as pas la permission",
           ephemeral: true
         });
       }
@@ -186,17 +199,17 @@ client.commands.set("mj", {
           },
           {
             id: role.id,
-            allow: ownerPermissions
+            allow: mjPermissions
           },
           {
             id: target.id,
-            allow: ownerPermissions
+            allow: mjPermissions
           }
         ]
       });
 
       await guild.channels.create({
-        name: "général",
+        name: "general",
         type: ChannelType.GuildText,
         parent: category.id
       });
@@ -214,7 +227,7 @@ client.commands.set("mj", {
       });
 
       return interaction.reply({
-        content: `✅ JDR **${name}** créé avec succès`,
+        content: `✅ JDR **${name}** créé`,
         ephemeral: true
       });
     }
@@ -228,19 +241,33 @@ async function deployCommands() {
   const commands = [
     new SlashCommandBuilder()
       .setName("mj")
-      .setDescription("Gestion JDR")
+      .setDescription("Gestion des JDR")
 
       .addSubcommand(sub =>
-        sub.setName("ajouter")
+        sub
+          .setName("ajouter")
           .setDescription("Créer un JDR")
-          .addStringOption(o => o.setName("nom").setRequired(true))
-          .addUserOption(o => o.setName("owner").setRequired(true))
+          .addStringOption(o =>
+            o.setName("nom")
+              .setDescription("Nom du JDR")
+              .setRequired(true)
+          )
+          .addUserOption(o =>
+            o.setName("owner")
+              .setDescription("MJ propriétaire")
+              .setRequired(true)
+          )
       )
 
       .addSubcommand(sub =>
-        sub.setName("add-gestion")
+        sub
+          .setName("add-gestion")
           .setDescription("Autoriser un rôle MJ")
-          .addRoleOption(o => o.setName("role").setRequired(true))
+          .addRoleOption(o =>
+            o.setName("role")
+              .setDescription("Rôle autorisé")
+              .setRequired(true)
+          )
       )
       .toJSON()
   ];
@@ -248,7 +275,7 @@ async function deployCommands() {
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
   try {
-    console.log("🚀 Deploy slash commands...");
+    console.log("🚀 Deploy commands...");
     await rest.put(
       Routes.applicationGuildCommands(
         process.env.CLIENT_ID,
@@ -268,6 +295,22 @@ async function deployCommands() {
 client.once("ready", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
   await deployCommands();
+});
+
+// =====================
+// INTERACTIONS
+// =====================
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const command = client.commands.get(interaction.commandName);
+  if (!command) return;
+
+  try {
+    await command.execute(interaction);
+  } catch (err) {
+    console.error(err);
+  }
 });
 
 // =====================
