@@ -48,51 +48,19 @@ function getGuildData(guildId) {
 }
 
 // =====================
-// PERMISSIONS MJ
+// MJ PERMISSIONS
 // =====================
 const mjPermissions = [
-  // =====================
-  // VIEW / TEXT
-  // =====================
   PermissionsBitField.Flags.ViewChannel,
   PermissionsBitField.Flags.SendMessages,
-  PermissionsBitField.Flags.SendMessagesInThreads,
-  PermissionsBitField.Flags.CreatePublicThreads,
-  PermissionsBitField.Flags.CreatePrivateThreads,
-  PermissionsBitField.Flags.ManageMessages,
-  PermissionsBitField.Flags.EmbedLinks,
-  PermissionsBitField.Flags.AttachFiles,
-  PermissionsBitField.Flags.ReadMessageHistory,
-  PermissionsBitField.Flags.AddReactions,
-  PermissionsBitField.Flags.UseExternalEmojis,
-  PermissionsBitField.Flags.UseExternalStickers,
-  PermissionsBitField.Flags.SendTTSMessages,
-  PermissionsBitField.Flags.UseApplicationCommands,
-
-  // =====================
-  // 🔥 GESTION SALONS (IMPORTANT)
-  // =====================
   PermissionsBitField.Flags.ManageChannels,
-
-  // =====================
-  // 🔥 GESTION THREADS
-  // =====================
-  PermissionsBitField.Flags.ManageThreads,
-
-  // =====================
-  // 🎙️ VOICE
-  // =====================
+  PermissionsBitField.Flags.ReadMessageHistory,
   PermissionsBitField.Flags.Connect,
-  PermissionsBitField.Flags.Speak,
-  PermissionsBitField.Flags.Stream,
-  PermissionsBitField.Flags.UseVAD,
-  PermissionsBitField.Flags.PrioritySpeaker,
-  PermissionsBitField.Flags.RequestToSpeak,
-  PermissionsBitField.Flags.UseEmbeddedActivities
+  PermissionsBitField.Flags.Speak
 ];
 
 // =====================
-// COMMAND HANDLER SIMPLE
+// COMMANDS
 // =====================
 client.commands = new Collection();
 
@@ -104,42 +72,61 @@ client.commands.set("mj", {
     .setName("mj")
     .setDescription("Gestion des JDR")
 
+    // AJOUT JDR
     .addSubcommand(sub =>
       sub
         .setName("ajouter")
         .setDescription("Créer un JDR")
         .addStringOption(o =>
-          o.setName("nom")
-            .setDescription("Nom du JDR")
-            .setRequired(true)
+          o.setName("nom").setDescription("Nom du JDR").setRequired(true)
         )
         .addUserOption(o =>
-          o.setName("owner")
-            .setDescription("MJ propriétaire")
-            .setRequired(true)
+          o.setName("owner").setDescription("MJ propriétaire").setRequired(true)
         )
     )
 
-    .addSubcommand(sub =>
-      sub
-        .setName("add-gestion")
-        .setDescription("Autoriser un rôle à créer des JDR")
-        .addRoleOption(o =>
-          o.setName("role")
-            .setDescription("Rôle autorisé")
-            .setRequired(true)
+    // GESTION ADD
+    .addSubcommandGroup(group =>
+      group
+        .setName("gestion")
+        .setDescription("Gestion des rôles MJ autorisés")
+
+        .addSubcommand(sub =>
+          sub
+            .setName("add")
+            .setDescription("Ajouter un rôle gestionnaire")
+            .addRoleOption(o =>
+              o.setName("role").setDescription("Rôle à ajouter").setRequired(true)
+            )
+        )
+
+        .addSubcommand(sub =>
+          sub
+            .setName("list")
+            .setDescription("Lister les rôles gestionnaires")
+        )
+
+        .addSubcommand(sub =>
+          sub
+            .setName("delete")
+            .setDescription("Supprimer un rôle gestionnaire")
+            .addRoleOption(o =>
+              o.setName("role").setDescription("Rôle à supprimer").setRequired(true)
+            )
         )
     ),
 
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
     const guild = interaction.guild;
     const guildData = getGuildData(guild.id);
 
+    const sub = interaction.options.getSubcommand();
+    const group = interaction.options.getSubcommandGroup();
+
     // =====================
-    // ADD ROLE AUTH
+    // GESTION ADD
     // =====================
-    if (sub === "add-gestion") {
+    if (group === "gestion" && sub === "add") {
       if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
         return interaction.reply({
           content: "❌ Admin uniquement",
@@ -155,7 +142,54 @@ client.commands.set("mj", {
       }
 
       return interaction.reply({
-        content: `✅ Rôle **${role.name}** autorisé`,
+        content: `✅ Rôle **${role.name}** ajouté aux gestionnaires MJ`,
+        ephemeral: true
+      });
+    }
+
+    // =====================
+    // GESTION LIST
+    // =====================
+    if (group === "gestion" && sub === "list") {
+      const roles = guildData.allowedRoles
+        .map(id => guild.roles.cache.get(id))
+        .filter(Boolean)
+        .map(r => `• ${r.name}`)
+        .join("\n");
+
+      return interaction.reply({
+        content: roles.length
+          ? `📋 Rôles MJ autorisés :\n${roles}`
+          : "❌ Aucun rôle gestionnaire configuré",
+        ephemeral: true
+      });
+    }
+
+    // =====================
+    // GESTION DELETE
+    // =====================
+    if (group === "gestion" && sub === "delete") {
+      if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
+        return interaction.reply({
+          content: "❌ Admin uniquement",
+          ephemeral: true
+        });
+      }
+
+      const role = interaction.options.getRole("role");
+
+      if (!guildData.allowedRoles.includes(role.id)) {
+        return interaction.reply({
+          content: "❌ Ce rôle n'est pas gestionnaire",
+          ephemeral: true
+        });
+      }
+
+      guildData.allowedRoles = guildData.allowedRoles.filter(id => id !== role.id);
+      saveData(data);
+
+      return interaction.reply({
+        content: `🗑️ Rôle **${role.name}** retiré des gestionnaires MJ`,
         ephemeral: true
       });
     }
@@ -182,12 +216,18 @@ client.commands.set("mj", {
 
       const target = await guild.members.fetch(owner.id);
 
-      const role = await guild.roles.create({
+      const mjRole = await guild.roles.create({
         name: `MJ - ${name}`,
         permissions: []
       });
 
-      await target.roles.add(role);
+      const playerRole = await guild.roles.create({
+        name: `JDR - ${name}`,
+        permissions: []
+      });
+
+      await target.roles.add(mjRole);
+      await target.roles.add(playerRole);
 
       const category = await guild.channels.create({
         name,
@@ -198,18 +238,24 @@ client.commands.set("mj", {
             deny: [PermissionsBitField.Flags.ViewChannel]
           },
           {
-            id: role.id,
+            id: mjRole.id,
             allow: mjPermissions
           },
           {
-            id: target.id,
-            allow: mjPermissions
+            id: playerRole.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.ReadMessageHistory,
+              PermissionsBitField.Flags.Connect,
+              PermissionsBitField.Flags.Speak
+            ]
           }
         ]
       });
 
       await guild.channels.create({
-        name: "general",
+        name: "général",
         type: ChannelType.GuildText,
         parent: category.id
       });
@@ -248,25 +294,33 @@ async function deployCommands() {
           .setName("ajouter")
           .setDescription("Créer un JDR")
           .addStringOption(o =>
-            o.setName("nom")
-              .setDescription("Nom du JDR")
-              .setRequired(true)
+            o.setName("nom").setRequired(true)
           )
           .addUserOption(o =>
-            o.setName("owner")
-              .setDescription("MJ propriétaire")
-              .setRequired(true)
+            o.setName("owner").setRequired(true)
           )
       )
 
-      .addSubcommand(sub =>
-        sub
-          .setName("add-gestion")
-          .setDescription("Autoriser un rôle MJ")
-          .addRoleOption(o =>
-            o.setName("role")
-              .setDescription("Rôle autorisé")
-              .setRequired(true)
+      .addSubcommandGroup(group =>
+        group
+          .setName("gestion")
+          .setDescription("Gestion des rôles MJ")
+
+          .addSubcommand(sub =>
+            sub.setName("add")
+              .setDescription("Ajouter rôle gestionnaire")
+              .addRoleOption(o => o.setName("role").setRequired(true))
+          )
+
+          .addSubcommand(sub =>
+            sub.setName("list")
+              .setDescription("Lister rôles gestionnaires")
+          )
+
+          .addSubcommand(sub =>
+            sub.setName("delete")
+              .setDescription("Supprimer rôle gestionnaire")
+              .addRoleOption(o => o.setName("role").setRequired(true))
           )
       )
       .toJSON()
@@ -295,22 +349,6 @@ async function deployCommands() {
 client.once("ready", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
   await deployCommands();
-});
-
-// =====================
-// INTERACTIONS
-// =====================
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
-
-  try {
-    await command.execute(interaction);
-  } catch (err) {
-    console.error(err);
-  }
 });
 
 // =====================
