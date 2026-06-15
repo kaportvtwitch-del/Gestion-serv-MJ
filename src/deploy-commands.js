@@ -2,43 +2,43 @@ const { REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
-// =====================
-// LOG CLEAN
-// =====================
-const log = (...args) => console.log("[DEPLOY]", ...args);
+console.log("[DEPLOY] 🚀 START");
 
-// =====================
-// LOAD COMMANDS DYNAMICALLY
-// =====================
 function loadCommands() {
   const commands = [];
   const commandsPath = path.join(__dirname, "commands");
 
+  if (!fs.existsSync(commandsPath)) {
+    console.log("[DEPLOY] ❌ commands folder not found");
+    return [];
+  }
+
   const files = fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"));
+
+  console.log("[DEPLOY] files found:", files.length);
 
   for (const file of files) {
     const cmd = require(path.join(commandsPath, file));
 
-    if (!cmd?.data) continue;
+    if (!cmd?.data) {
+      console.log("[DEPLOY] skip:", file);
+      continue;
+    }
 
     commands.push(cmd.data.toJSON());
+    console.log("[DEPLOY] loaded:", cmd.data.name);
   }
 
   return commands;
 }
 
-// =====================
-// DEPLOY FUNCTION
-// =====================
 async function deploy() {
   try {
-    log("🚀 Starting deploy...");
-
     const commands = loadCommands();
 
-    const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+    console.log("[DEPLOY] total commands:", commands.length);
 
-    log(`📦 Commands found: ${commands.length}`);
+    const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
     await rest.put(
       Routes.applicationGuildCommands(
@@ -48,15 +48,10 @@ async function deploy() {
       { body: commands }
     );
 
-    log("✅ Commands deployed successfully");
+    console.log("[DEPLOY] ✅ DONE");
   } catch (err) {
-    log("❌ Deploy failed");
-    console.error(err);
-    process.exit(1);
+    console.error("[DEPLOY] ❌ ERROR", err);
   }
 }
 
-// =====================
-// RUN
-// =====================
 deploy();
