@@ -1,3 +1,18 @@
+const http = require("http");
+
+const PORT_LOCK = 3111;
+
+const server = http.createServer();
+
+server.listen(PORT_LOCK, "127.0.0.1", () => {
+  console.log("🔒 LOCK ACQUIS - seul process actif");
+});
+
+server.on("error", (err) => {
+  console.log("⛔ Autre instance détectée → arrêt");
+  process.exit(1);
+});
+
 const fs = require("fs");
 const path = require("path");
 
