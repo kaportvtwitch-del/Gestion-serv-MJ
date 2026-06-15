@@ -13,7 +13,7 @@ const {
 } = require("discord.js");
 
 // =====================
-// DEBUG START
+// START LOG
 // =====================
 console.log("====================================");
 console.log("🚀 BOT START");
@@ -21,14 +21,7 @@ console.log("PID:", process.pid);
 console.log("====================================");
 
 // =====================
-// CLIENT
-// =====================
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
-
-// =====================
-// GLOBAL LOCK (multi-process safe inside runtime)
+// ANTI DOUBLE INSTANCE SIMPLE SAFE
 // =====================
 if (!global.__MJ_BOT_RUNNING__) {
   global.__MJ_BOT_RUNNING__ = true;
@@ -38,39 +31,50 @@ if (!global.__MJ_BOT_RUNNING__) {
 }
 
 // =====================
+// CLIENT
+// =====================
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
+
+// =====================
 // COMMANDS
 // =====================
 client.commands = new Collection();
 
-// ⚠️ ton système MJ reste identique ici
-
 // =====================
-// INTERACTION HANDLER (SAFE)
+// INTERACTION HANDLER (FULL DEBUG)
 // =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  console.log("================================");
-  console.log("COMMAND:", interaction.commandName);
+  // 🔥 DEBUG 1 : réception Discord
+  console.log("\n==============================");
+  console.log("📩 DISCORD COMMAND RECEIVED");
+  console.log("CMD:", interaction.commandName);
   console.log("SUB:", interaction.options.getSubcommand(false));
   console.log("GROUP:", interaction.options.getSubcommandGroup(false));
+  console.log("INTERACTION ID:", interaction.id);
   console.log("PID:", process.pid);
-  console.log("TIME:", Date.now());
-  console.log("================================");
+  console.log("==============================\n");
 
   const command = client.commands.get(interaction.commandName);
-  if (!command) return;
+  if (!command) {
+    console.log("❌ COMMAND NOT FOUND");
+    return;
+  }
 
   try {
-    if (interaction.deferred || interaction.replied) {
-      console.log("⛔ INTERACTION IGNORÉE (déjà traitée)");
-      return;
-    }
+    console.log("⚙️ HANDLER START EXECUTION");
 
     await command.execute(interaction);
 
+    console.log("✅ COMMAND EXECUTION FINISHED");
+    console.log("📤 RESPONSE SENT OR DEFERRED");
+
   } catch (err) {
-    console.error("❌ ERROR:", err);
+    console.log("❌ ERROR DURING COMMAND EXECUTION");
+    console.error(err);
 
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
@@ -82,21 +86,11 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// READY (FIX FINAL ANTI DOUBLE INSTANCE)
+// READY EVENT
 // =====================
 client.once("clientReady", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
   console.log(`🆔 PID actif : ${process.pid}`);
-
-  // 🔥 ANTI DOUBLE INSTANCE RÉEL (après connexion Discord)
-  if (global.__MJ_BOT_ACTIVE__) {
-    console.log("⛔ DOUBLE INSTANCE APRÈS LOGIN → EXIT");
-    process.exit(0);
-  }
-
-  global.__MJ_BOT_ACTIVE__ = true;
-
-  console.log("🔐 INSTANCE UNIQUE CONFIRMÉE");
 
   await deployCommands();
 });
