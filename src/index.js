@@ -1,6 +1,55 @@
 const fs = require("fs");
 const path = require("path");
 
+const lockPath = path.join(__dirname, "../bot.lock");
+
+function isProcessRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (fs.existsSync(lockPath)) {
+  const oldPid = parseInt(fs.readFileSync(lockPath, "utf8"));
+
+  if (!isNaN(oldPid) && isProcessRunning(oldPid)) {
+    console.log(`⛔ Instance déjà active (PID ${oldPid})`);
+    process.exit(1);
+  }
+
+  try {
+    fs.unlinkSync(lockPath);
+  } catch {}
+}
+
+fs.writeFileSync(lockPath, process.pid.toString());
+
+function cleanup() {
+  try {
+    if (fs.existsSync(lockPath)) {
+      fs.unlinkSync(lockPath);
+    }
+  } catch {}
+}
+
+process.on("exit", cleanup);
+process.on("SIGINT", () => {
+  cleanup();
+  process.exit();
+});
+process.on("SIGTERM", () => {
+  cleanup();
+  process.exit();
+});
+
+console.log(`🚀 Démarrage PID ${process.pid}`);
+
+const fs = require("fs");
+const path = require("path");
+
 const {
   Client,
   GatewayIntentBits,
@@ -270,23 +319,32 @@ client.commands.set("mj", {
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
+  console.log(
+    `[INTERACTION] ${interaction.commandName} | PID=${process.pid}`
+  );
+
   const command = client.commands.get(interaction.commandName);
-  if (!command) return;
+
+  if (!command) {
+    console.log(
+      `[INTERACTION] Commande introuvable : ${interaction.commandName}`
+    );
+    return;
+  }
 
   try {
     await command.execute(interaction);
   } catch (err) {
     console.error(err);
 
-    if (!interaction.replied) {
+    if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
-        content: "❌ Erreur commande",
+        content: "❌ Une erreur est survenue.",
         ephemeral: true
       });
     }
   }
 });
-
 // =====================
 // DEPLOY COMMANDS
 // =====================
@@ -315,8 +373,10 @@ async function deployCommands() {
 // =====================
 // READY
 // =====================
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
+  console.log(`🆔 PID : ${process.pid}`);
+
   await deployCommands();
 });
 
