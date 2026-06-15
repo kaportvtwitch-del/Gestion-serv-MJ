@@ -13,7 +13,7 @@ const {
 } = require("discord.js");
 
 // =====================
-// DEBUG START
+// START LOG
 // =====================
 console.log("====================================");
 console.log("🚀 BOT START");
@@ -32,16 +32,15 @@ const client = new Client({
 // =====================
 client.commands = new Collection();
 
-// ⚠️ ici tu gardes ton système de commandes existant
-// (mj command déjà définie chez toi)
+// ⚠️ ici tu gardes ton command builder MJ déjà existant
+// (je ne le réécris pas pour éviter d’écraser ton setup actuel)
 
 // =====================
-// INTERACTION HANDLER (DEBUG AJOUTÉ)
+// INTERACTION HANDLER (FIX DOUBLE EXECUTION)
 // =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  // 🔥 DEBUG AJOUTÉ (ce que tu m’as demandé)
   console.log("================================");
   console.log("COMMAND:", interaction.commandName);
   console.log("SUB:", interaction.options.getSubcommand(false));
@@ -54,11 +53,17 @@ client.on("interactionCreate", async (interaction) => {
   if (!command) return;
 
   try {
+    // 🔥 PROTECTION ANTI DOUBLE EXECUTION
+    if (interaction.deferred || interaction.replied) {
+      console.log("⛔ Interaction déjà traitée (bloquée)");
+      return;
+    }
+
     await command.execute(interaction);
   } catch (err) {
     console.error("❌ ERROR COMMAND:", err);
 
-    if (!interaction.replied) {
+    if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: "❌ Erreur commande",
         ephemeral: true
