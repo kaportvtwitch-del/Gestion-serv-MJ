@@ -1,23 +1,51 @@
 const fs = require("fs");
 const path = require("path");
+const process = require("process");
 
 const {
   Client,
   GatewayIntentBits,
   Collection,
   REST,
-  Routes,
-  PermissionsBitField,
-  ChannelType
+  Routes
 } = require("discord.js");
 
 // =====================
-// START LOG
+// CONFIG
 // =====================
-console.log("====================================");
-console.log("🚀 BOT START");
-console.log("PID:", process.pid);
-console.log("====================================");
+const LOCK_FILE = path.join(__dirname, "../bot.lock");
+const LOG = (...args) => console.log("[BOT]", ...args);
+
+// =====================
+// ANTI DOUBLE INSTANCE (FIABLE)
+// =====================
+function acquireLock() {
+  try {
+    if (fs.existsSync(LOCK_FILE)) {
+      const pid = fs.readFileSync(LOCK_FILE, "utf8");
+
+      try {
+        process.kill(parseInt(pid), 0);
+        LOG("⛔ Bot déjà actif (PID:", pid, ") → EXIT");
+        process.exit(0);
+      } catch {
+        LOG("🧹 Ancien lock mort supprimé");
+      }
+    }
+
+    fs.writeFileSync(LOCK_FILE, process.pid.toString(), "utf8");
+
+    process.on("exit", () => {
+      if (fs.existsSync(LOCK_FILE)) fs.unlinkSync(LOCK_FILE);
+    });
+
+    LOG("🔐 LOCK ACQUIS");
+  } catch (err) {
+    LOG("❌ LOCK ERROR", err);
+  }
+}
+
+acquireLock();
 
 // =====================
 // CLIENT
@@ -29,68 +57,51 @@ const client = new Client({
 client.commands = new Collection();
 
 // =====================
-// DATA
+// GLOBAL ERROR HANDLING (ANTI CRASH)
 // =====================
-const dataPath = path.join(__dirname, "../data.json");
+process.on("uncaughtException", (err) => {
+  LOG("💥 UNCAUGHT EXCEPTION");
+  console.error(err);
+});
 
-function loadData() {
-  if (!fs.existsSync(dataPath)) {
-    fs.writeFileSync(dataPath, JSON.stringify({ guilds: {} }, null, 2));
-  }
-  return JSON.parse(fs.readFileSync(dataPath, "utf8"));
+process.on("unhandledRejection", (err) => {
+  LOG("💥 UNHANDLED REJECTION");
+  console.error(err);
+});
+
+// =====================
+// CLEAN LOG SYSTEM
+// =====================
+function logCommand(interaction) {
+  LOG("================================");
+  LOG("CMD:", interaction.commandName);
+  LOG("SUB:", interaction.options.getSubcommand(false));
+  LOG("ID:", interaction.id);
+  LOG("USER:", interaction.user.tag);
+  LOG("================================");
 }
 
-function saveData(data) {
-  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-}
-
-let data = loadData();
-
-function getGuildData(guildId) {
-  if (!data.guilds[guildId]) {
-    data.guilds[guildId] = { allowedRoles: [] };
-  }
-  return data.guilds[guildId];
-}
-
 // =====================
-// MJ PERMISSIONS (MJ ROLE)
-// =====================
-const mjPermissions = [
-  PermissionsBitField.Flags.ViewChannel,
-  PermissionsBitField.Flags.SendMessages,
-  PermissionsBitField.Flags.ManageMessages,
-  PermissionsBitField.Flags.ReadMessageHistory,
-  PermissionsBitField.Flags.Connect,
-  PermissionsBitField.Flags.Speak,
-  PermissionsBitField.Flags.ManageChannels,
-  PermissionsBitField.Flags.ManageRoles
-];
-
-// =====================
-// INTERACTION HANDLER (DEBUG SAFE)
+// INTERACTIONS
 // =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  console.log("\n==============================");
-  console.log("CMD:", interaction.commandName);
-  console.log("SUB:", interaction.options.getSubcommand(false));
-  console.log("GROUP:", interaction.options.getSubcommandGroup(false));
-  console.log("==============================\n");
+  logCommand(interaction);
 
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
 
   try {
-    if (interaction.deferred || interaction.replied) return;
     await command.execute(interaction);
+    LOG("✅ EXEC OK");
   } catch (err) {
+    LOG("❌ COMMAND ERROR");
     console.error(err);
 
     if (!interaction.replied) {
       await interaction.reply({
-        content: "❌ Erreur commande",
+        content: "❌ Erreur serveur",
         ephemeral: true
       });
     }
@@ -101,7 +112,9 @@ client.on("interactionCreate", async (interaction) => {
 // READY
 // =====================
 client.once("clientReady", async () => {
-  console.log(`✅ Connecté : ${client.user.tag}`);
+  LOG("🚀 CONNECTÉ:", client.user.tag);
+  LOG("PID:", process.pid);
+
   await deployCommands();
 });
 
@@ -109,13 +122,11 @@ client.once("clientReady", async () => {
 // DEPLOY COMMANDS
 // =====================
 async function deployCommands() {
-  const commands = [
-    client.commands.get("mj").data.toJSON()
-  ];
+  const commands = client.commands.map(c => c.data.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-  console.log("🚀 Deploy commands...");
+  LOG("🚀 DEPLOY COMMANDS...");
 
   await rest.put(
     Routes.applicationGuildCommands(
@@ -125,8 +136,23 @@ async function deployCommands() {
     { body: commands }
   );
 
-  console.log("✅ Commands OK");
+  LOG("✅ COMMANDS OK");
 }
+
+// =====================
+// AUTO RECOVERY SYSTEM
+// =====================
+function restart() {
+  LOG("🔁 AUTO RESTART TRIGGERED");
+
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+}
+
+process.on("exit", () => {
+  LOG("👋 BOT STOPPED");
+});
 
 // =====================
 // LOGIN

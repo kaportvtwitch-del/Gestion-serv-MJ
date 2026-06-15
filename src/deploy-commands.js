@@ -1,38 +1,44 @@
 const { REST, Routes } = require("discord.js");
+const fs = require("fs");
+const path = require("path");
 
-const commands = [
-  {
-    name: "mj",
-    description: "Gestion des JDR",
-    options: [
-      {
-        name: "ajouter",
-        type: 1,
-        description: "Créer un JDR",
-        options: [
-          {
-            name: "nom",
-            type: 3,
-            required: true,
-            description: "Nom du JDR"
-          },
-          {
-            name: "owner",
-            type: 6,
-            required: true,
-            description: "MJ propriétaire"
-          }
-        ]
-      }
-    ]
+// =====================
+// LOG CLEAN
+// =====================
+const log = (...args) => console.log("[DEPLOY]", ...args);
+
+// =====================
+// LOAD COMMANDS DYNAMICALLY
+// =====================
+function loadCommands() {
+  const commands = [];
+  const commandsPath = path.join(__dirname, "commands");
+
+  const files = fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"));
+
+  for (const file of files) {
+    const cmd = require(path.join(commandsPath, file));
+
+    if (!cmd?.data) continue;
+
+    commands.push(cmd.data.toJSON());
   }
-];
 
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+  return commands;
+}
 
-(async () => {
+// =====================
+// DEPLOY FUNCTION
+// =====================
+async function deploy() {
   try {
-    console.log("🚀 Déploiement GUILD commands...");
+    log("🚀 Starting deploy...");
+
+    const commands = loadCommands();
+
+    const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+
+    log(`📦 Commands found: ${commands.length}`);
 
     await rest.put(
       Routes.applicationGuildCommands(
@@ -42,8 +48,15 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
       { body: commands }
     );
 
-    console.log("✅ Commandes disponibles immédiatement !");
+    log("✅ Commands deployed successfully");
   } catch (err) {
+    log("❌ Deploy failed");
     console.error(err);
+    process.exit(1);
   }
-})();
+}
+
+// =====================
+// RUN
+// =====================
+deploy();

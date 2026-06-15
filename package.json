@@ -1,6 +1,6 @@
 {
-  "name": "mj-bot",
-  "version": "1.0.0",
+  "name": "mj-bot-pro",
+  "version": "2.0.0",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
