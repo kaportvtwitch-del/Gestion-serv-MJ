@@ -1,6 +1,5 @@
 const {
   SlashCommandBuilder,
-  PermissionsBitField,
   ChannelType
 } = require("discord.js");
 
@@ -10,40 +9,35 @@ module.exports = {
     .setDescription("Gestion JDR complète")
 
     // =====================
-    // AJOUT JDR (FIX ARGUMENTS)
+    // AJOUT JDR
     // =====================
     .addSubcommand(sub =>
       sub
-        .setName("ajouter")
-        .setDescription("Créer un JDR complet")
+        .setName("add")
+        .setDescription("Créer un JDR")
         .addStringOption(o =>
           o.setName("nom")
             .setDescription("Nom du JDR")
             .setRequired(true)
         )
-        .addUserOption(o =>
-          o.setName("owner")
-            .setDescription("MJ propriétaire")
-            .setRequired(true)
-        )
     )
 
     // =====================
-    // SUPPRIMER CATÉGORIE
+    // SUPPRIMER
     // =====================
     .addSubcommand(sub =>
       sub
-        .setName("supprimer")
+        .setName("delete")
         .setDescription("Supprimer une catégorie JDR")
         .addStringOption(o =>
           o.setName("category_id")
-            .setDescription("ID catégorie")
+            .setDescription("ID de la catégorie")
             .setRequired(true)
         )
     )
 
     // =====================
-    // GESTION GROUP (IMPORTANT FIX)
+    // GESTION GROUP
     // =====================
     .addSubcommandGroup(group =>
       group
@@ -53,12 +47,7 @@ module.exports = {
         .addSubcommand(sub =>
           sub
             .setName("add")
-            .setDescription("Ajouter rôle MJ autorisé")
-            .addRoleOption(o =>
-              o.setName("role")
-                .setDescription("Rôle à autoriser")
-                .setRequired(true)
-            )
+            .setDescription("Ajouter un rôle MJ")
         )
 
         .addSubcommand(sub =>
@@ -70,12 +59,7 @@ module.exports = {
         .addSubcommand(sub =>
           sub
             .setName("delete")
-            .setDescription("Supprimer rôle MJ")
-            .addRoleOption(o =>
-              o.setName("role")
-                .setDescription("Rôle à retirer")
-                .setRequired(true)
-            )
+            .setDescription("Supprimer un rôle MJ")
         )
     ),
 
@@ -84,78 +68,86 @@ module.exports = {
     const group = interaction.options.getSubcommandGroup();
     const guild = interaction.guild;
 
-    // =====================
-    // AJOUT JDR
-    // =====================
-    if (sub === "ajouter") {
-      await interaction.deferReply({ ephemeral: true });
-
-      const name = interaction.options.getString("nom");
-      const owner = interaction.options.getUser("owner");
-
-      const member = await guild.members.fetch(owner.id);
-
-      const category = await guild.channels.create({
-        name,
-        type: ChannelType.GuildCategory
-      });
-
-      return interaction.editReply(`✅ JDR "${name}" créé`);
-    }
+    console.log("[MJ] sub =", sub, "| group =", group);
 
     // =====================
-    // SUPPRIMER
+    // SAFETY DEFAULT (évite crash silencieux)
     // =====================
-    if (sub === "supprimer") {
-      await interaction.deferReply({ ephemeral: true });
+    const safeReply = async (msg) => {
+      if (interaction.replied || interaction.deferred) {
+        return interaction.followUp({ content: msg, ephemeral: true });
+      }
+      return interaction.reply({ content: msg, ephemeral: true });
+    };
 
-      const id = interaction.options.getString("category_id");
+    try {
 
-      const category = guild.channels.cache.get(id);
+      // =====================
+      // CREATE JDR
+      // =====================
+      if (sub === "add") {
+        const name = interaction.options.getString("nom");
 
-      if (!category || category.type !== ChannelType.GuildCategory) {
-        return interaction.editReply("❌ Catégorie invalide");
+        const category = await guild.channels.create({
+          name,
+          type: ChannelType.GuildCategory
+        });
+
+        return safeReply(`✅ JDR "${name}" créé (${category.id})`);
       }
 
-      const channels = guild.channels.cache.filter(c => c.parentId === id);
+      // =====================
+      // DELETE CATEGORY
+      // =====================
+      if (sub === "delete") {
+        const id = interaction.options.getString("category_id");
 
-      for (const ch of channels.values()) {
-        await ch.delete().catch(() => {});
+        const category = guild.channels.cache.get(id);
+
+        if (!category || category.type !== ChannelType.GuildCategory) {
+          return safeReply("❌ Catégorie invalide");
+        }
+
+        const channels = guild.channels.cache.filter(c => c.parentId === id);
+
+        for (const ch of channels.values()) {
+          await ch.delete().catch(() => {});
+        }
+
+        await category.delete().catch(() => {});
+
+        return safeReply("🗑️ Catégorie supprimée");
       }
 
-      await category.delete().catch(() => {});
+      // =====================
+      // GESTION ADD
+      // =====================
+      if (group === "gestion" && sub === "add") {
+        return safeReply("✅ gestion add OK");
+      }
 
-      return interaction.editReply("🗑️ supprimé");
-    }
+      // =====================
+      // GESTION LIST
+      // =====================
+      if (group === "gestion" && sub === "list") {
+        return safeReply("📜 gestion list OK");
+      }
 
-    // =====================
-    // GESTION ADD
-    // =====================
-    if (group === "gestion" && sub === "add") {
-      return interaction.reply({
-        content: "✅ gestion add OK",
-        ephemeral: true
-      });
-    }
+      // =====================
+      // GESTION DELETE
+      // =====================
+      if (group === "gestion" && sub === "delete") {
+        return safeReply("🗑️ gestion delete OK");
+      }
 
-    // =====================
-    // GESTION LIST
-    // =====================
-    if (group === "gestion" && sub === "list") {
-      return interaction.reply({
-        content: "📜 list OK",
-        ephemeral: true
-      });
-    }
+      // =====================
+      // FALLBACK (IMPORTANT)
+      // =====================
+      return safeReply("⚠️ commande inconnue");
 
-    // =====================
-    // GESTION DELETE
-    // =====================
-    if (group === "gestion" && sub === "delete") {
-      return interaction.reply({
-        content: "🗑️ delete OK",
-        ephemeral: true
-      });
+    } catch (err) {
+      console.error("[MJ ERROR]", err);
+      return safeReply("❌ erreur interne commande MJ");
     }
   }
 };
