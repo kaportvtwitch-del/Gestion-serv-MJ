@@ -7,7 +7,6 @@ const {
   Collection,
   REST,
   Routes,
-  SlashCommandBuilder,
   PermissionsBitField,
   ChannelType
 } = require("discord.js");
@@ -21,62 +20,75 @@ console.log("PID:", process.pid);
 console.log("====================================");
 
 // =====================
-// ANTI DOUBLE INSTANCE SIMPLE SAFE
-// =====================
-if (!global.__MJ_BOT_RUNNING__) {
-  global.__MJ_BOT_RUNNING__ = true;
-} else {
-  console.log("⛔ INSTANCE DOUBLON DETECTÉE → STOP");
-  process.exit(0);
-}
-
-// =====================
 // CLIENT
 // =====================
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// =====================
-// COMMANDS
-// =====================
 client.commands = new Collection();
 
 // =====================
-// INTERACTION HANDLER (FULL DEBUG)
+// DATA
+// =====================
+const dataPath = path.join(__dirname, "../data.json");
+
+function loadData() {
+  if (!fs.existsSync(dataPath)) {
+    fs.writeFileSync(dataPath, JSON.stringify({ guilds: {} }, null, 2));
+  }
+  return JSON.parse(fs.readFileSync(dataPath, "utf8"));
+}
+
+function saveData(data) {
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+}
+
+let data = loadData();
+
+function getGuildData(guildId) {
+  if (!data.guilds[guildId]) {
+    data.guilds[guildId] = { allowedRoles: [] };
+  }
+  return data.guilds[guildId];
+}
+
+// =====================
+// MJ PERMISSIONS (MJ ROLE)
+// =====================
+const mjPermissions = [
+  PermissionsBitField.Flags.ViewChannel,
+  PermissionsBitField.Flags.SendMessages,
+  PermissionsBitField.Flags.ManageMessages,
+  PermissionsBitField.Flags.ReadMessageHistory,
+  PermissionsBitField.Flags.Connect,
+  PermissionsBitField.Flags.Speak,
+  PermissionsBitField.Flags.ManageChannels,
+  PermissionsBitField.Flags.ManageRoles
+];
+
+// =====================
+// INTERACTION HANDLER (DEBUG SAFE)
 // =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  // 🔥 DEBUG 1 : réception Discord
   console.log("\n==============================");
-  console.log("📩 DISCORD COMMAND RECEIVED");
   console.log("CMD:", interaction.commandName);
   console.log("SUB:", interaction.options.getSubcommand(false));
   console.log("GROUP:", interaction.options.getSubcommandGroup(false));
-  console.log("INTERACTION ID:", interaction.id);
-  console.log("PID:", process.pid);
   console.log("==============================\n");
 
   const command = client.commands.get(interaction.commandName);
-  if (!command) {
-    console.log("❌ COMMAND NOT FOUND");
-    return;
-  }
+  if (!command) return;
 
   try {
-    console.log("⚙️ HANDLER START EXECUTION");
-
+    if (interaction.deferred || interaction.replied) return;
     await command.execute(interaction);
-
-    console.log("✅ COMMAND EXECUTION FINISHED");
-    console.log("📤 RESPONSE SENT OR DEFERRED");
-
   } catch (err) {
-    console.log("❌ ERROR DURING COMMAND EXECUTION");
     console.error(err);
 
-    if (!interaction.replied && !interaction.deferred) {
+    if (!interaction.replied) {
       await interaction.reply({
         content: "❌ Erreur commande",
         ephemeral: true
@@ -86,12 +98,10 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// READY EVENT
+// READY
 // =====================
 client.once("clientReady", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
-  console.log(`🆔 PID actif : ${process.pid}`);
-
   await deployCommands();
 });
 
