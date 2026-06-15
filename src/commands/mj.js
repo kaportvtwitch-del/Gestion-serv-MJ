@@ -26,12 +26,13 @@ function saveData(data) {
 
 function ensureGuild(data, guildId) {
   if (!data.guilds[guildId]) {
-    data.guilds[guildId] = {
-      mjRoles: []
-    };
+    data.guilds[guildId] = { mjRoles: [] };
   }
 }
 
+// =====================
+// COMMAND
+// =====================
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("mj")
@@ -73,9 +74,7 @@ module.exports = {
         )
 
         .addSubcommand(sub =>
-          sub
-            .setName("list")
-            .setDescription("Lister rôles MJ")
+          sub.setName("list").setDescription("Lister rôles MJ")
         )
 
         .addSubcommand(sub =>
@@ -90,18 +89,34 @@ module.exports = {
 
   async execute(interaction) {
     try {
-      console.log("[MJ] START");
+      console.log("[MJ] ===================");
+      console.log("[MJ] RECEIVED COMMAND");
 
-      // 🔥 IMPORTANT : évite timeout Discord
+      // =====================
+      // SAFETY CHECK FIRST
+      // =====================
+      if (!interaction.isChatInputCommand()) return;
+      if (!interaction.guild) {
+        return interaction.reply({
+          content: "❌ Commande utilisable uniquement sur un serveur",
+          ephemeral: true
+        });
+      }
+
+      // =====================
+      // ANTI TIMEOUT DISCORD (CRITICAL)
+      // =====================
       await interaction.deferReply({ ephemeral: true });
 
       const guild = interaction.guild;
-      const sub = interaction.options.getSubcommand();
-      const group = interaction.options.getSubcommandGroup();
+
+      const sub = interaction.options.getSubcommand(false);
+      const group = interaction.options.getSubcommandGroup(false);
+
+      console.log("[MJ] SUB:", sub, "GROUP:", group);
 
       const data = loadData();
       ensureGuild(data, guild.id);
-
       const guildData = data.guilds[guild.id];
 
       const isAdmin = interaction.member.permissions.has(
@@ -115,7 +130,7 @@ module.exports = {
         const name = interaction.options.getString("nom");
         const owner = interaction.options.getUser("owner");
 
-        console.log("[MJ] CREATE JDR:", name);
+        console.log("[MJ] CREATE:", name);
 
         const category = await guild.channels.create({
           name,
@@ -149,9 +164,7 @@ module.exports = {
           Speak: true
         });
 
-        return interaction.editReply(
-          `✅ JDR "${name}" créé`
-        );
+        return interaction.editReply(`✅ JDR "${name}" créé`);
       }
 
       // =====================
@@ -160,7 +173,7 @@ module.exports = {
       if (sub === "delete") {
         const id = interaction.options.getString("category_id");
 
-        console.log("[MJ] DELETE CATEGORY:", id);
+        console.log("[MJ] DELETE:", id);
 
         const category = guild.channels.cache.get(id);
 
@@ -182,7 +195,7 @@ module.exports = {
       }
 
       // =====================
-      // GESTION MJ SYSTEM
+      // GESTION MJ
       // =====================
       if (group === "gestion") {
         if (!isAdmin) {
@@ -220,10 +233,7 @@ module.exports = {
             return interaction.editReply("❌ rôle non trouvé");
           }
 
-          guildData.mjRoles = guildData.mjRoles.filter(
-            r => r !== role.id
-          );
-
+          guildData.mjRoles = guildData.mjRoles.filter(r => r !== role.id);
           saveData(data);
 
           return interaction.editReply(`🗑️ rôle supprimé: ${role.name}`);
@@ -235,14 +245,17 @@ module.exports = {
     } catch (err) {
       console.error("[MJ ERROR]", err);
 
-      // évite crash silencieux + réponse Discord propre
-      if (interaction.deferred || interaction.replied) {
-        return interaction.editReply("❌ Une erreur est survenue.");
-      } else {
-        return interaction.reply({
-          content: "❌ Une erreur est survenue.",
-          ephemeral: true
-        });
+      try {
+        if (interaction.deferred || interaction.replied) {
+          return interaction.editReply("❌ Erreur interne");
+        } else {
+          return interaction.reply({
+            content: "❌ Erreur interne",
+            ephemeral: true
+          });
+        }
+      } catch (e) {
+        console.error("[MJ FALLBACK ERROR]", e);
       }
     }
   }
