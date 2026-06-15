@@ -1,6 +1,5 @@
 require("./deploy-commands.js");
-process.on("unhandledRejection", console.error);
-process.on("uncaughtException", console.error);
+
 const fs = require("fs");
 const path = require("path");
 const process = require("process");
@@ -20,7 +19,7 @@ const LOCK_FILE = path.join(__dirname, "../bot.lock");
 const LOG = (...args) => console.log("[BOT]", ...args);
 
 // =====================
-// ANTI DOUBLE INSTANCE (FIABLE)
+// ANTI DOUBLE INSTANCE
 // =====================
 function acquireLock() {
   try {
@@ -54,13 +53,16 @@ acquireLock();
 // CLIENT
 // =====================
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
 client.commands = new Collection();
 
 // =====================
-// GLOBAL ERROR HANDLING (ANTI CRASH)
+// GLOBAL ERROR HANDLING
 // =====================
 process.on("uncaughtException", (err) => {
   LOG("💥 UNCAUGHT EXCEPTION");
@@ -73,7 +75,7 @@ process.on("unhandledRejection", (err) => {
 });
 
 // =====================
-// CLEAN LOG SYSTEM
+// LOG COMMAND
 // =====================
 function logCommand(interaction) {
   LOG("================================");
@@ -102,7 +104,7 @@ client.on("interactionCreate", async (interaction) => {
     LOG("❌ COMMAND ERROR");
     console.error(err);
 
-    if (!interaction.replied) {
+    if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: "❌ Erreur serveur",
         ephemeral: true
@@ -112,9 +114,9 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// READY
+// READY (FIX IMPORTANT)
 // =====================
-client.once("clientReady", async () => {
+client.once("ready", async () => {
   LOG("🚀 CONNECTÉ:", client.user.tag);
   LOG("PID:", process.pid);
 
@@ -143,16 +145,8 @@ async function deployCommands() {
 }
 
 // =====================
-// AUTO RECOVERY SYSTEM
+// AUTO RECOVERY
 // =====================
-function restart() {
-  LOG("🔁 AUTO RESTART TRIGGERED");
-
-  setTimeout(() => {
-    process.exit(1);
-  }, 1000);
-}
-
 process.on("exit", () => {
   LOG("👋 BOT STOPPED");
 });
