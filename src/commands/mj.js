@@ -11,7 +11,7 @@ const path = require("path");
 const DATA_FILE = path.join(__dirname, "../../data.json");
 
 // =====================
-// LOAD / SAVE SAFE
+// SAFE DATA
 // =====================
 function loadData() {
   if (!fs.existsSync(DATA_FILE)) {
@@ -24,9 +24,6 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// =====================
-// INIT GUILD SAFE
-// =====================
 function ensureGuild(data, guildId) {
   if (!data.guilds[guildId]) {
     data.guilds[guildId] = {
@@ -40,55 +37,38 @@ module.exports = {
     .setName("mj")
     .setDescription("Système JDR multi-serveur")
 
-    // =====================
-    // CREATE JDR
-    // =====================
     .addSubcommand(sub =>
       sub
         .setName("add")
         .setDescription("Créer un JDR")
         .addStringOption(o =>
-          o.setName("nom")
-            .setDescription("Nom du JDR")
-            .setRequired(true)
+          o.setName("nom").setDescription("Nom du JDR").setRequired(true)
         )
         .addUserOption(o =>
-          o.setName("owner")
-            .setDescription("Propriétaire du JDR")
-            .setRequired(true)
+          o.setName("owner").setDescription("Propriétaire").setRequired(true)
         )
     )
 
-    // =====================
-    // DELETE JDR
-    // =====================
     .addSubcommand(sub =>
       sub
         .setName("delete")
         .setDescription("Supprimer un JDR")
         .addStringOption(o =>
-          o.setName("category_id")
-            .setDescription("ID catégorie")
-            .setRequired(true)
+          o.setName("category_id").setDescription("ID catégorie").setRequired(true)
         )
     )
 
-    // =====================
-    // GESTION GROUP
-    // =====================
     .addSubcommandGroup(group =>
       group
         .setName("gestion")
-        .setDescription("Gestion MJ (admin only)")
+        .setDescription("Gestion MJ")
 
         .addSubcommand(sub =>
           sub
             .setName("add")
             .setDescription("Ajouter rôle MJ")
             .addRoleOption(o =>
-              o.setName("role")
-                .setDescription("Rôle autorisé")
-                .setRequired(true)
+              o.setName("role").setDescription("Rôle").setRequired(true)
             )
         )
 
@@ -103,161 +83,164 @@ module.exports = {
             .setName("delete")
             .setDescription("Supprimer rôle MJ")
             .addRoleOption(o =>
-              o.setName("role")
-                .setDescription("Rôle à retirer")
-                .setRequired(true)
+              o.setName("role").setDescription("Rôle").setRequired(true)
             )
         )
     ),
 
   async execute(interaction) {
-    const guild = interaction.guild;
-    const sub = interaction.options.getSubcommand();
-    const group = interaction.options.getSubcommandGroup();
+    try {
+      console.log("[MJ] START");
 
-    const data = loadData();
+      // 🔥 IMPORTANT : évite timeout Discord
+      await interaction.deferReply({ ephemeral: true });
 
-    ensureGuild(data, guild.id);
+      const guild = interaction.guild;
+      const sub = interaction.options.getSubcommand();
+      const group = interaction.options.getSubcommandGroup();
 
-    const guildData = data.guilds[guild.id];
+      const data = loadData();
+      ensureGuild(data, guild.id);
 
-    const isAdmin = interaction.member.permissions.has(
-      PermissionFlagsBits.Administrator
-    );
+      const guildData = data.guilds[guild.id];
 
-    // =====================
-    // CREATE JDR
-    // =====================
-    if (sub === "add") {
-      const name = interaction.options.getString("nom");
-      const owner = interaction.options.getUser("owner");
+      const isAdmin = interaction.member.permissions.has(
+        PermissionFlagsBits.Administrator
+      );
 
-      const category = await guild.channels.create({
-        name,
-        type: ChannelType.GuildCategory,
-        permissionOverwrites: [
-          {
-            id: guild.roles.everyone.id,
-            deny: [PermissionsBitField.Flags.ViewChannel]
-          }
-        ]
-      });
+      // =====================
+      // CREATE JDR
+      // =====================
+      if (sub === "add" && !group) {
+        const name = interaction.options.getString("nom");
+        const owner = interaction.options.getUser("owner");
 
-      const member = await guild.members.fetch(owner.id);
+        console.log("[MJ] CREATE JDR:", name);
 
-      const role = await guild.roles.create({
-        name: `MJ-${name}`,
-        permissions: []
-      });
-
-      await member.roles.add(role);
-
-      await category.permissionOverwrites.create(role, {
-        ViewChannel: true,
-        SendMessages: true,
-        ManageChannels: true,
-        ManageRoles: true,
-        ReadMessageHistory: true,
-        AttachFiles: true,
-        EmbedLinks: true,
-        Connect: true,
-        Speak: true
-      });
-
-      return interaction.reply({
-        content: `✅ JDR "${name}" créé`,
-        ephemeral: true
-      });
-    }
-
-    // =====================
-    // DELETE JDR
-    // =====================
-    if (sub === "delete") {
-      const id = interaction.options.getString("category_id");
-
-      const category = guild.channels.cache.get(id);
-
-      if (!category || category.type !== ChannelType.GuildCategory) {
-        return interaction.reply({
-          content: "❌ catégorie invalide",
-          ephemeral: true
+        const category = await guild.channels.create({
+          name,
+          type: ChannelType.GuildCategory,
+          permissionOverwrites: [
+            {
+              id: guild.roles.everyone.id,
+              deny: [PermissionsBitField.Flags.ViewChannel]
+            }
+          ]
         });
-      }
 
-      const channels = guild.channels.cache.filter(c => c.parentId === id);
+        const member = await guild.members.fetch(owner.id);
 
-      for (const ch of channels.values()) {
-        await ch.delete().catch(() => {});
-      }
-
-      await category.delete().catch(() => {});
-
-      return interaction.reply({
-        content: "🗑️ JDR supprimé",
-        ephemeral: true
-      });
-    }
-
-    // =====================
-    // GESTION SYSTEM (ADMIN ONLY)
-    // =====================
-    if (group === "gestion") {
-
-      if (!isAdmin) {
-        return interaction.reply({
-          content: "⛔ admin uniquement",
-          ephemeral: true
+        const role = await guild.roles.create({
+          name: `MJ-${name}`,
+          permissions: []
         });
-      }
 
-      // ADD ROLE
-      if (sub === "add") {
-        const role = interaction.options.getRole("role");
+        await member.roles.add(role);
 
-        if (!guildData.mjRoles.includes(role.id)) {
-          guildData.mjRoles.push(role.id);
-        }
-
-        saveData(data);
-
-        return interaction.reply({
-          content: `✅ rôle ajouté: ${role.name}`,
-          ephemeral: true
+        await category.permissionOverwrites.create(role, {
+          ViewChannel: true,
+          SendMessages: true,
+          ManageChannels: true,
+          ManageRoles: true,
+          ReadMessageHistory: true,
+          AttachFiles: true,
+          EmbedLinks: true,
+          Connect: true,
+          Speak: true
         });
+
+        return interaction.editReply(
+          `✅ JDR "${name}" créé`
+        );
       }
 
-      // LIST ROLE
-      if (sub === "list") {
-        const list = guildData.mjRoles;
-
-        const text = list.length
-          ? list.map(r => `<@&${r}>`).join("\n")
-          : "Aucun rôle MJ";
-
-        return interaction.reply({
-          content: `📜 rôles MJ:\n${text}`,
-          ephemeral: true
-        });
-      }
-
-      // DELETE ROLE
+      // =====================
+      // DELETE JDR
+      // =====================
       if (sub === "delete") {
-        const role = interaction.options.getRole("role");
+        const id = interaction.options.getString("category_id");
 
-        if (!guildData.mjRoles.includes(role.id)) {
-          return interaction.reply({
-            content: "❌ ce rôle n'est pas gestionnaire",
-            ephemeral: true
-          });
+        console.log("[MJ] DELETE CATEGORY:", id);
+
+        const category = guild.channels.cache.get(id);
+
+        if (!category || category.type !== ChannelType.GuildCategory) {
+          return interaction.editReply("❌ catégorie invalide");
         }
 
-        guildData.mjRoles = guildData.mjRoles.filter(r => r !== role.id);
+        const channels = guild.channels.cache.filter(
+          c => c.parentId === id
+        );
 
-        saveData(data);
+        for (const ch of channels.values()) {
+          await ch.delete().catch(console.error);
+        }
 
+        await category.delete().catch(console.error);
+
+        return interaction.editReply("🗑️ JDR supprimé");
+      }
+
+      // =====================
+      // GESTION MJ SYSTEM
+      // =====================
+      if (group === "gestion") {
+        if (!isAdmin) {
+          return interaction.editReply("⛔ admin uniquement");
+        }
+
+        // ADD ROLE
+        if (sub === "add") {
+          const role = interaction.options.getRole("role");
+
+          if (!guildData.mjRoles.includes(role.id)) {
+            guildData.mjRoles.push(role.id);
+            saveData(data);
+          }
+
+          return interaction.editReply(`✅ rôle ajouté: ${role.name}`);
+        }
+
+        // LIST
+        if (sub === "list") {
+          const list = guildData.mjRoles;
+
+          const text = list.length
+            ? list.map(r => `<@&${r}>`).join("\n")
+            : "Aucun rôle MJ";
+
+          return interaction.editReply(`📜 rôles MJ:\n${text}`);
+        }
+
+        // DELETE ROLE
+        if (sub === "delete") {
+          const role = interaction.options.getRole("role");
+
+          if (!guildData.mjRoles.includes(role.id)) {
+            return interaction.editReply("❌ rôle non trouvé");
+          }
+
+          guildData.mjRoles = guildData.mjRoles.filter(
+            r => r !== role.id
+          );
+
+          saveData(data);
+
+          return interaction.editReply(`🗑️ rôle supprimé: ${role.name}`);
+        }
+      }
+
+      return interaction.editReply("❓ commande inconnue");
+
+    } catch (err) {
+      console.error("[MJ ERROR]", err);
+
+      // évite crash silencieux + réponse Discord propre
+      if (interaction.deferred || interaction.replied) {
+        return interaction.editReply("❌ Une erreur est survenue.");
+      } else {
         return interaction.reply({
-          content: `🗑️ rôle supprimé: ${role.name}`,
+          content: "❌ Une erreur est survenue.",
           ephemeral: true
         });
       }
