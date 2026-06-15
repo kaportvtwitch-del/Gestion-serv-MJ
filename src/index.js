@@ -1,6 +1,28 @@
 const fs = require("fs");
 const path = require("path");
 
+const {
+  Client,
+  GatewayIntentBits,
+  Collection,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  PermissionsBitField,
+  ChannelType
+} = require("discord.js");
+
+// =====================
+// CONSOLE DEBUG FORCÉ
+// =====================
+console.log("====================================");
+console.log("🚀 BOT STARTING...");
+console.log("PID:", process.pid);
+console.log("====================================");
+
+// =====================
+// ANTI DOUBLE INSTANCE (HOSTINGER FIX)
+// =====================
 const lockPath = path.join(__dirname, "../bot.lock");
 
 function isProcessRunning(pid) {
@@ -16,7 +38,7 @@ if (fs.existsSync(lockPath)) {
   const oldPid = parseInt(fs.readFileSync(lockPath, "utf8"));
 
   if (!isNaN(oldPid) && isProcessRunning(oldPid)) {
-    console.log(`⛔ Instance déjà active (PID ${oldPid})`);
+    console.log(`⛔ INSTANCE DÉJÀ ACTIVE (PID ${oldPid})`);
     process.exit(1);
   }
 
@@ -25,7 +47,7 @@ if (fs.existsSync(lockPath)) {
   } catch {}
 }
 
-fs.writeFileSync(lockPath, process.pid.toString());
+fs.writeFileSync(lockPath, String(process.pid));
 
 function cleanup() {
   try {
@@ -44,28 +66,6 @@ process.on("SIGTERM", () => {
   cleanup();
   process.exit();
 });
-
-console.log(`🚀 Démarrage PID ${process.pid}`);
-
-const fs = require("fs");
-const path = require("path");
-
-const {
-  Client,
-  GatewayIntentBits,
-  Collection,
-  REST,
-  Routes,
-  SlashCommandBuilder,
-  PermissionsBitField,
-  ChannelType
-} = require("discord.js");
-
-// =====================
-// ERROR HANDLING SAFE
-// =====================
-process.on("uncaughtException", console.error);
-process.on("unhandledRejection", console.error);
 
 // =====================
 // CLIENT
@@ -113,7 +113,7 @@ const mjPermissions = [
 ];
 
 // =====================
-// COMMAND STORAGE
+// COMMANDS
 // =====================
 client.commands = new Collection();
 
@@ -125,7 +125,6 @@ client.commands.set("mj", {
     .setName("mj")
     .setDescription("Gestion des JDR")
 
-    // CREATE JDR
     .addSubcommand(sub =>
       sub
         .setName("ajouter")
@@ -138,7 +137,6 @@ client.commands.set("mj", {
         )
     )
 
-    // GESTION GROUP
     .addSubcommandGroup(group =>
       group
         .setName("gestion")
@@ -176,8 +174,10 @@ client.commands.set("mj", {
     const sub = interaction.options.getSubcommand();
     const group = interaction.options.getSubcommandGroup();
 
+    console.log(`[CMD] ${interaction.user.tag} -> ${interaction.commandName} ${group ?? ""} ${sub}`);
+
     // =====================
-    // ADD ROLE MJ
+    // GESTION ADD
     // =====================
     if (group === "gestion" && sub === "add") {
       if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -198,7 +198,7 @@ client.commands.set("mj", {
     }
 
     // =====================
-    // LIST MJ ROLES
+    // GESTION LIST
     // =====================
     if (group === "gestion" && sub === "list") {
       const roles = guildData.allowedRoles
@@ -216,7 +216,7 @@ client.commands.set("mj", {
     }
 
     // =====================
-    // DELETE MJ ROLE
+    // GESTION DELETE
     // =====================
     if (group === "gestion" && sub === "delete") {
       if (!interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -260,13 +260,11 @@ client.commands.set("mj", {
 
       const target = await guild.members.fetch(owner.id);
 
-      // MJ ROLE
       const mjRole = await guild.roles.create({
         name: `MJ - ${name}`,
         permissions: []
       });
 
-      // PLAYER ROLE
       const playerRole = await guild.roles.create({
         name: `JDR - ${name}`,
         permissions: []
@@ -275,7 +273,6 @@ client.commands.set("mj", {
       await target.roles.add(mjRole);
       await target.roles.add(playerRole);
 
-      // CATEGORY
       const category = await guild.channels.create({
         name,
         type: ChannelType.GuildCategory,
@@ -314,37 +311,40 @@ client.commands.set("mj", {
 });
 
 // =====================
-// INTERACTIONS HANDLER (CRUCIAL)
+// INTERACTION HANDLER (DEBUG FIX)
 // =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  console.log(
-    `[INTERACTION] ${interaction.commandName} | PID=${process.pid}`
-  );
+  console.log(`[INTERACTION] ${interaction.commandName} | PID=${process.pid}`);
 
   const command = client.commands.get(interaction.commandName);
-
-  if (!command) {
-    console.log(
-      `[INTERACTION] Commande introuvable : ${interaction.commandName}`
-    );
-    return;
-  }
+  if (!command) return;
 
   try {
     await command.execute(interaction);
   } catch (err) {
-    console.error(err);
+    console.error("❌ ERROR COMMAND:", err);
 
-    if (!interaction.replied && !interaction.deferred) {
+    if (!interaction.replied) {
       await interaction.reply({
-        content: "❌ Une erreur est survenue.",
+        content: "❌ Erreur commande",
         ephemeral: true
       });
     }
   }
 });
+
+// =====================
+// READY (FIX MODERNE)
+// =====================
+client.once("clientReady", async () => {
+  console.log(`✅ Connecté : ${client.user.tag}`);
+  console.log(`🆔 PID actif : ${process.pid}`);
+
+  await deployCommands();
+});
+
 // =====================
 // DEPLOY COMMANDS
 // =====================
@@ -355,30 +355,18 @@ async function deployCommands() {
 
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-  try {
-    console.log("🚀 Deploy commands...");
-    await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
-      ),
-      { body: commands }
-    );
-    console.log("✅ Commands OK");
-  } catch (err) {
-    console.error(err);
-  }
+  console.log("🚀 Deploy commands...");
+
+  await rest.put(
+    Routes.applicationGuildCommands(
+      process.env.CLIENT_ID,
+      process.env.GUILD_ID
+    ),
+    { body: commands }
+  );
+
+  console.log("✅ Commands OK");
 }
-
-// =====================
-// READY
-// =====================
-client.once("clientReady", async () => {
-  console.log(`✅ Connecté : ${client.user.tag}`);
-  console.log(`🆔 PID : ${process.pid}`);
-
-  await deployCommands();
-});
 
 // =====================
 // LOGIN
