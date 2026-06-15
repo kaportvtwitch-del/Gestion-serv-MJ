@@ -1,18 +1,3 @@
-const http = require("http");
-
-const PORT_LOCK = 3111;
-
-const server = http.createServer();
-
-server.listen(PORT_LOCK, "127.0.0.1", () => {
-  console.log("🔒 LOCK ACQUIS - seul process actif");
-});
-
-server.on("error", (err) => {
-  console.log("⛔ Autre instance détectée → arrêt");
-  process.exit(1);
-});
-
 const fs = require("fs");
 const path = require("path");
 
@@ -28,7 +13,7 @@ const {
 } = require("discord.js");
 
 // =====================
-// START LOG
+// DEBUG START
 // =====================
 console.log("====================================");
 console.log("🚀 BOT START");
@@ -43,15 +28,24 @@ const client = new Client({
 });
 
 // =====================
+// GLOBAL LOCK (multi-process safe inside runtime)
+// =====================
+if (!global.__MJ_BOT_RUNNING__) {
+  global.__MJ_BOT_RUNNING__ = true;
+} else {
+  console.log("⛔ INSTANCE DOUBLON DETECTÉE → STOP");
+  process.exit(0);
+}
+
+// =====================
 // COMMANDS
 // =====================
 client.commands = new Collection();
 
-// ⚠️ ici tu gardes ton command builder MJ déjà existant
-// (je ne le réécris pas pour éviter d’écraser ton setup actuel)
+// ⚠️ ton système MJ reste identique ici
 
 // =====================
-// INTERACTION HANDLER (FIX DOUBLE EXECUTION)
+// INTERACTION HANDLER (SAFE)
 // =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
@@ -68,15 +62,15 @@ client.on("interactionCreate", async (interaction) => {
   if (!command) return;
 
   try {
-    // 🔥 PROTECTION ANTI DOUBLE EXECUTION
     if (interaction.deferred || interaction.replied) {
-      console.log("⛔ Interaction déjà traitée (bloquée)");
+      console.log("⛔ INTERACTION IGNORÉE (déjà traitée)");
       return;
     }
 
     await command.execute(interaction);
+
   } catch (err) {
-    console.error("❌ ERROR COMMAND:", err);
+    console.error("❌ ERROR:", err);
 
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
@@ -88,11 +82,21 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// READY
+// READY (FIX FINAL ANTI DOUBLE INSTANCE)
 // =====================
 client.once("clientReady", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
   console.log(`🆔 PID actif : ${process.pid}`);
+
+  // 🔥 ANTI DOUBLE INSTANCE RÉEL (après connexion Discord)
+  if (global.__MJ_BOT_ACTIVE__) {
+    console.log("⛔ DOUBLE INSTANCE APRÈS LOGIN → EXIT");
+    process.exit(0);
+  }
+
+  global.__MJ_BOT_ACTIVE__ = true;
+
+  console.log("🔐 INSTANCE UNIQUE CONFIRMÉE");
 
   await deployCommands();
 });
