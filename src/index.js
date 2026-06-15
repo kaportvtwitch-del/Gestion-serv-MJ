@@ -1,4 +1,6 @@
 require("./deploy-commands.js");
+process.on("unhandledRejection", console.error);
+process.on("uncaughtException", console.error);
 const fs = require("fs");
 const path = require("path");
 const process = require("process");
