@@ -3,6 +3,8 @@ const fs = require("fs");
 const path = require("path");
 
 console.log("[DEPLOY] 🚀 START");
+console.log("[DEPLOY] CLIENT_ID =", process.env.CLIENT_ID);
+console.log("[DEPLOY] GUILD_ID =", process.env.GUILD_ID);
 
 function loadCommands() {
   const commands = [];
